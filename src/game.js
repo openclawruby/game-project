@@ -14,7 +14,9 @@ let gameState = {
     lastSpawn: 0,
     songPattern: [],
     songIndex: 0,
-    startTime: 0
+    startTime: 0,
+    currentSongId: 'easy',
+    isPaused: false
 };
 
 // Constants
@@ -206,16 +208,44 @@ function registerHit(note, quality) {
         feedback = 'Perfect!';
         gameState.combo++;
         audio.playHitSound('perfect');
+        
+        // Particle burst for perfect hits
+        if (settings.get('particlesEnabled') && particles) {
+            const laneIndex = note.key - 1;
+            const lane = noteLanes.children[laneIndex];
+            const rect = lane.getBoundingClientRect();
+            const gameRect = gameArea.getBoundingClientRect();
+            const x = rect.left - gameRect.left + rect.width / 2;
+            const y = note.y + 25;
+            particles.createBurst(x, y, audio.getColor(note.key), 25);
+        }
     } else if (quality === 'good') {
         points = 50;
         feedback = 'Good!';
         gameState.combo++;
         audio.playHitSound('good');
+        
+        // Small sparkle for good hits
+        if (settings.get('particlesEnabled') && particles) {
+            const laneIndex = note.key - 1;
+            const lane = noteLanes.children[laneIndex];
+            const rect = lane.getBoundingClientRect();
+            const gameRect = gameArea.getBoundingClientRect();
+            const x = rect.left - gameRect.left + rect.width / 2;
+            const y = note.y + 25;
+            particles.createSparkle(x, y, audio.getColor(note.key));
+        }
     } else {
         points = 10;
         feedback = 'Bad';
         gameState.combo = 0;
         audio.playHitSound('bad');
+    }
+    
+    // Combo celebration at milestones
+    if (gameState.combo > 0 && gameState.combo % 10 === 0 && settings.get('particlesEnabled') && particles) {
+        const gameRect = gameArea.getBoundingClientRect();
+        particles.createComboCelebration(gameRect.width / 2, gameRect.height / 2, '#ffd700');
     }
     
     // Combo multiplier
@@ -351,6 +381,16 @@ function gameLoop(timestamp) {
     
     updateNotes(deltaTime);
     
+    // Update and render particles
+    if (particles && settings.get('particlesEnabled')) {
+        particles.update();
+        // Clear and redraw particles
+        const canvas = particles.canvas;
+        const ctx = particles.ctx;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.draw();
+    }
+    
     // Check if song is complete
     const elapsed = Date.now() - gameState.startTime;
     const lastNoteTime = gameState.songPattern[gameState.songPattern.length - 1]?.time || 0;
@@ -368,6 +408,22 @@ function startGame() {
     // Initialize audio
     audio.init();
     
+    // Initialize particles
+    if (typeof particles === 'undefined' && gameArea) {
+        const canvas = document.createElement('canvas');
+        canvas.width = gameArea.offsetWidth;
+        canvas.height = gameArea.offsetHeight;
+        canvas.style.position = 'absolute';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        gameArea.appendChild(canvas);
+        initParticles(canvas);
+    }
+    
+    // Get song ID from current song
+    const songId = Object.keys(songs).find(key => songs[key] === currentSong) || 'easy';
+    
     // Reset game state
     gameState = {
         isPlaying: true,
@@ -377,12 +433,14 @@ function startGame() {
         hits: 0,
         misses: 0,
         notes: [],
-        noteSpeed: 300,
+        noteSpeed: settings.get('noteSpeed'),
         spawnRate: 800,
         lastSpawn: 0,
         songPattern: [...currentSong.pattern],
         songIndex: 0,
-        startTime: Date.now()
+        startTime: Date.now(),
+        currentSongId: songId,
+        isPaused: false
     };
     
     // Clear existing notes
@@ -391,6 +449,8 @@ function startGame() {
     // Hide screens
     startScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('pause-btn').disabled = false;
     
     // Start game loop
     lastTime = performance.now();
@@ -406,14 +466,67 @@ function endGame() {
     const total = gameState.hits + gameState.misses;
     const accuracy = total > 0 ? Math.round((gameState.hits / total) * 100) : 100;
     
+    // Save high score
+    const rank = highScores.addScore(gameState.currentSongId, {
+        score: gameState.score,
+        accuracy: accuracy,
+        maxCombo: gameState.maxCombo,
+        hits: gameState.hits,
+        misses: gameState.misses,
+        songName: currentSong.name
+    });
+    
+    // Check if new high score
+    const isNewBest = rank === 1;
+    
+    // Calculate grade
+    let grade = 'D';
+    if (accuracy >= 95) grade = 'S';
+    else if (accuracy >= 90) grade = 'A';
+    else if (accuracy >= 80) grade = 'B';
+    else if (accuracy >= 70) grade = 'C';
+    
     document.getElementById('final-score').innerHTML = `
-        Score: ${gameState.score}<br>
-        Max Combo: ${gameState.maxCombo}<br>
-        Accuracy: ${accuracy}%<br>
-        Hits: ${gameState.hits} | Misses: ${gameState.misses}
+        <div style="font-size: 48px; margin-bottom: 10px;">${isNewBest ? '🏆 ' : ''}${grade}</div>
+        <div style="color: #ff6b9d; font-size: 28px; margin-bottom: 15px;">Score: ${gameState.score}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;">
+            <div>🎯 Max Combo: ${gameState.maxCombo}</div>
+            <div>📊 Accuracy: ${accuracy}%</div>
+            <div>✅ Hits: ${gameState.hits}</div>
+            <div>❌ Misses: ${gameState.misses}</div>
+            <div>🏅 Rank: #${rank}</div>
+            <div>🎵 Song: ${currentSong.name}</div>
+        </div>
+        ${isNewBest ? '<div style="margin-top: 15px; color: #00ff88; font-size: 18px;">✨ NEW HIGH SCORE! ✨</div>' : ''}
     `;
     
+    // Show high scores
+    showHighScores(gameState.currentSongId);
+    
     gameOverScreen.style.display = 'flex';
+}
+
+// Show high scores for a song
+function showHighScores(songId) {
+    const scores = highScores.getHighScores(songId);
+    if (scores.length === 0) return;
+    
+    const scoresHtml = scores.map((s, i) => `
+        <div style="padding: 8px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="color: ${i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : '#888'}; font-weight: bold; width: 30px;">#${i + 1}</span>
+                <span style="color: #fff; font-weight: bold;">${s.score}</span>
+            </div>
+            <div style="color: #888; font-size: 12px;">
+                ${s.accuracy}% | ${new Date(s.date).toLocaleDateString()}
+            </div>
+        </div>
+    `).join('');
+    
+    const highScoresDiv = document.getElementById('high-scores');
+    if (highScoresDiv) {
+        highScoresDiv.innerHTML = `<div style="margin-top: 20px; text-align: left;"><div style="color: #888; font-size: 14px; margin-bottom: 10px;">🏆 Top Scores</div>${scoresHtml}</div>`;
+    }
 }
 
 // Show start screen
@@ -443,7 +556,115 @@ function init() {
         Current: <strong style="color: #ff6b9d">${currentSong.name}</strong><br>
         BPM: ${currentSong.bpm} | Notes: ${currentSong.pattern.length}
     `;
+    
+    // Initialize settings
+    if (typeof settings !== 'undefined') {
+        settings.apply();
+        document.getElementById('volume-slider').value = settings.get('masterVolume') * 100;
+        document.getElementById('speed-slider').value = (settings.get('noteSpeed') / 300) * 100;
+        document.getElementById('sounds-toggle').checked = settings.get('keySoundsEnabled');
+        document.getElementById('particles-toggle').checked = settings.get('particlesEnabled');
+    }
+    
     console.log('🎹 Piano Rhythm Game loaded!');
 }
+
+// Pause functionality
+function togglePause() {
+    if (!gameState.isPlaying && !gameState.isPaused) return;
+    
+    const pauseOverlay = document.getElementById('pause-overlay');
+    const pauseBtn = document.getElementById('pause-btn');
+    
+    if (gameState.isPaused) {
+        // Resume
+        gameState.isPaused = false;
+        gameState.isPlaying = true;
+        pauseOverlay.style.display = 'none';
+        pauseBtn.disabled = false;
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+        if (audio.ctx) audio.ctx.resume();
+    } else {
+        // Pause
+        gameState.isPaused = true;
+        gameState.isPlaying = false;
+        pauseOverlay.style.display = 'flex';
+        pauseBtn.disabled = false;
+        if (audio.ctx) audio.ctx.suspend();
+    }
+}
+
+function quitGame() {
+    gameState.isPlaying = false;
+    gameState.isPaused = false;
+    document.getElementById('pause-overlay').style.display = 'none';
+    showStartScreen();
+    document.getElementById('pause-btn').disabled = true;
+}
+
+// Settings functions
+function showSettings() {
+    const modal = document.getElementById('settings-modal');
+    modal.style.display = 'flex';
+    
+    // Load current values
+    document.getElementById('volume-slider').value = settings.get('masterVolume') * 100;
+    document.getElementById('volume-value').textContent = Math.round(settings.get('masterVolume') * 100);
+    document.getElementById('speed-slider').value = (settings.get('noteSpeed') / 300) * 100;
+    document.getElementById('speed-value').textContent = Math.round((settings.get('noteSpeed') / 300) * 100);
+    document.getElementById('sounds-toggle').checked = settings.get('keySoundsEnabled');
+    document.getElementById('particles-toggle').checked = settings.get('particlesEnabled');
+}
+
+function closeSettings() {
+    document.getElementById('settings-modal').style.display = 'none';
+}
+
+function updateVolume(value) {
+    document.getElementById('volume-value').textContent = value;
+    settings.set('masterVolume', value / 100);
+    if (audio.masterGain) {
+        audio.masterGain.gain.value = value / 100;
+    }
+}
+
+function updateSpeed(value) {
+    document.getElementById('speed-value').textContent = value;
+    settings.set('noteSpeed', (value / 100) * 300);
+    if (gameState.isPlaying) {
+        gameState.noteSpeed = (value / 100) * 300;
+    }
+}
+
+function toggleSounds(enabled) {
+    settings.set('keySoundsEnabled', enabled);
+}
+
+function toggleParticles(enabled) {
+    settings.set('particlesEnabled', enabled);
+}
+
+function saveSettings() {
+    settings.saveSettings();
+    settings.apply();
+    closeSettings();
+}
+
+function resetSettings() {
+    if (confirm('Reset all settings to defaults?')) {
+        settings.reset();
+        settings.apply();
+        showSettings();
+    }
+}
+
+// Keyboard shortcut for pause
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && gameState.isPlaying) {
+        e.preventDefault();
+        togglePause();
+    }
+});
 
 init();

@@ -14,7 +14,9 @@ let gameState = {
     lastSpawn: 0,
     songPattern: [],
     songIndex: 0,
-    startTime: 0
+    startTime: 0,
+    currentSongId: 'easy',
+    isPaused: false
 };
 
 // Constants
@@ -368,6 +370,9 @@ function startGame() {
     // Initialize audio
     audio.init();
     
+    // Get song ID from current song
+    const songId = Object.keys(songs).find(key => songs[key] === currentSong) || 'easy';
+    
     // Reset game state
     gameState = {
         isPlaying: true,
@@ -382,7 +387,9 @@ function startGame() {
         lastSpawn: 0,
         songPattern: [...currentSong.pattern],
         songIndex: 0,
-        startTime: Date.now()
+        startTime: Date.now(),
+        currentSongId: songId,
+        isPaused: false
     };
     
     // Clear existing notes
@@ -406,14 +413,67 @@ function endGame() {
     const total = gameState.hits + gameState.misses;
     const accuracy = total > 0 ? Math.round((gameState.hits / total) * 100) : 100;
     
+    // Save high score
+    const rank = highScores.addScore(gameState.currentSongId, {
+        score: gameState.score,
+        accuracy: accuracy,
+        maxCombo: gameState.maxCombo,
+        hits: gameState.hits,
+        misses: gameState.misses,
+        songName: currentSong.name
+    });
+    
+    // Check if new high score
+    const isNewBest = rank === 1;
+    
+    // Calculate grade
+    let grade = 'D';
+    if (accuracy >= 95) grade = 'S';
+    else if (accuracy >= 90) grade = 'A';
+    else if (accuracy >= 80) grade = 'B';
+    else if (accuracy >= 70) grade = 'C';
+    
     document.getElementById('final-score').innerHTML = `
-        Score: ${gameState.score}<br>
-        Max Combo: ${gameState.maxCombo}<br>
-        Accuracy: ${accuracy}%<br>
-        Hits: ${gameState.hits} | Misses: ${gameState.misses}
+        <div style="font-size: 48px; margin-bottom: 10px;">${isNewBest ? '🏆 ' : ''}${grade}</div>
+        <div style="color: #ff6b9d; font-size: 28px; margin-bottom: 15px;">Score: ${gameState.score}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;">
+            <div>🎯 Max Combo: ${gameState.maxCombo}</div>
+            <div>📊 Accuracy: ${accuracy}%</div>
+            <div>✅ Hits: ${gameState.hits}</div>
+            <div>❌ Misses: ${gameState.misses}</div>
+            <div>🏅 Rank: #${rank}</div>
+            <div>🎵 Song: ${currentSong.name}</div>
+        </div>
+        ${isNewBest ? '<div style="margin-top: 15px; color: #00ff88; font-size: 18px;">✨ NEW HIGH SCORE! ✨</div>' : ''}
     `;
     
+    // Show high scores
+    showHighScores(gameState.currentSongId);
+    
     gameOverScreen.style.display = 'flex';
+}
+
+// Show high scores for a song
+function showHighScores(songId) {
+    const scores = highScores.getHighScores(songId);
+    if (scores.length === 0) return;
+    
+    const scoresHtml = scores.map((s, i) => `
+        <div style="padding: 8px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="color: ${i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : '#888'}; font-weight: bold; width: 30px;">#${i + 1}</span>
+                <span style="color: #fff; font-weight: bold;">${s.score}</span>
+            </div>
+            <div style="color: #888; font-size: 12px;">
+                ${s.accuracy}% | ${new Date(s.date).toLocaleDateString()}
+            </div>
+        </div>
+    `).join('');
+    
+    const highScoresDiv = document.getElementById('high-scores');
+    if (highScoresDiv) {
+        highScoresDiv.innerHTML = `<div style="margin-top: 20px; text-align: left;"><div style="color: #888; font-size: 14px; margin-bottom: 10px;">🏆 Top Scores</div>${scoresHtml}</div>`;
+    }
 }
 
 // Show start screen

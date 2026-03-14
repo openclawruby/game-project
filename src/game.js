@@ -1,4 +1,17 @@
 // 🎹 Piano Rhythm Game - Main Game Logic
+// Version: 2.0.1
+
+const GAME_VERSION = '2.0.1';
+
+// Pokemon data for each key
+const POKEMON_DATA = {
+    1: { name: 'Pikachu', emoji: '⚡', color: '#ffeb3b' },
+    2: { name: 'Squirtle', emoji: '💧', color: '#4fc3f7' },
+    3: { name: 'Charmander', emoji: '🔥', color: '#ff7043' },
+    4: { name: 'Bulbasaur', emoji: '🌿', color: '#81c784' },
+    5: { name: 'Jigglypuff', emoji: '🧚', color: '#f48fb1' },
+    6: { name: 'Eevee', emoji: '⚡', color: '#d7ccc8' }
+};
 
 // Game State
 let gameState = {
@@ -217,7 +230,9 @@ function registerHit(note, quality) {
             const gameRect = gameArea.getBoundingClientRect();
             const x = rect.left - gameRect.left + rect.width / 2;
             const y = note.y + 25;
-            particles.createBurst(x, y, audio.getColor(note.key), 25);
+            // Use Pokemon color for particles
+            const pokemonColor = POKEMON_DATA[note.key]?.color || audio.getColor(note.key);
+            particles.createBurst(x, y, pokemonColor, 25);
         }
     } else if (quality === 'good') {
         points = 50;
@@ -233,7 +248,9 @@ function registerHit(note, quality) {
             const gameRect = gameArea.getBoundingClientRect();
             const x = rect.left - gameRect.left + rect.width / 2;
             const y = note.y + 25;
-            particles.createSparkle(x, y, audio.getColor(note.key));
+            // Use Pokemon color for particles
+            const pokemonColor = POKEMON_DATA[note.key]?.color || audio.getColor(note.key);
+            particles.createSparkle(x, y, pokemonColor);
         }
     } else {
         points = 10;
@@ -552,9 +569,19 @@ function selectSong() {
 
 // Initialize
 function init() {
+    // Set default song from additionalSongs
+    const defaultSong = additionalSongs['twinkle'];
+    currentSong = {
+        name: defaultSong.name,
+        bpm: defaultSong.bpm,
+        pattern: defaultSong.pattern,
+        id: defaultSong.id
+    };
+    
     startScreen.querySelector('p').innerHTML = `
         Current: <strong style="color: #ff6b9d">${currentSong.name}</strong><br>
-        BPM: ${currentSong.bpm} | Notes: ${currentSong.pattern.length}
+        <span style="color: #888;">${defaultSong.difficulty} • ${defaultSong.category}</span><br>
+        BPM: ${defaultSong.bpm} | Notes: ${defaultSong.pattern.length}
     `;
     
     // Initialize settings
@@ -566,7 +593,8 @@ function init() {
         document.getElementById('particles-toggle').checked = settings.get('particlesEnabled');
     }
     
-    console.log('🎹 Piano Rhythm Game loaded!');
+    console.log(`🎹 Piano Rhythm Game v${GAME_VERSION} loaded!`);
+    console.log(`🎵 Songs: ${Object.keys(additionalSongs).length} | 🎹 Pokemon Keys: 6`);
 }
 
 // Pause functionality

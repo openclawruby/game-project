@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#ff6b9d">
+    <meta name="description" content="Tap the keys in time with falling notes to create music!">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
     <title>🎹 Piano Rhythm Game</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -391,6 +397,16 @@
     <script src="src/settings.js"></script>
     <script src="src/particles.js"></script>
     <script src="src/highscores.js"></script>
+    <script src="src/songs.js"></script>
     <script src="src/game.js"></script>
+    
+    <!-- PWA Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log('✅ Service Worker registered'))
+                .catch(err => console.error('❌ SW registration failed:', err));
+        }
+    </script>
 </body>
 </html>

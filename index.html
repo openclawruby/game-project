@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Game Project</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        #game-container {
+            text-align: center;
+        }
+        canvas {
+            border: 3px solid #4a9eff;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(74, 158, 255, 0.3);
+            background: #0f0f23;
+        }
+        #ui {
+            color: #fff;
+            margin-top: 20px;
+        }
+        #score {
+            font-size: 24px;
+            color: #4a9eff;
+        }
+        #instructions {
+            margin-top: 15px;
+            color: #888;
+            font-size: 14px;
+        }
+        h1 {
+            color: #fff;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>🎮 Game Project - Sprint 1 MVP</h1>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div id="score">Score: 0</div>
+            <div id="instructions">Use Arrow Keys or WASD to move | Collect the green squares!</div>
+        </div>
+    </div>
+
+    <script src="src/game.js"></script>
+</body>
+</html>

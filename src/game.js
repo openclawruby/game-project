@@ -371,6 +371,14 @@ function updateNotes(deltaTime) {
     });
 }
 
+// Update progress bar
+function updateProgressBar(progress) {
+    const progressBar = document.getElementById('progress-bar');
+    if (progressBar) {
+        progressBar.style.width = `${progress * 100}%`;
+    }
+}
+
 // Game loop
 let lastTime = 0;
 function gameLoop(timestamp) {
@@ -391,11 +399,15 @@ function gameLoop(timestamp) {
         particles.draw();
     }
     
-    // Check if song is complete
+    // Update progress bar
     const elapsed = Date.now() - gameState.startTime;
     const lastNoteTime = gameState.songPattern[gameState.songPattern.length - 1]?.time || 0;
+    const songDuration = lastNoteTime + 2000;
+    const progress = Math.min(elapsed / songDuration, 1);
+    updateProgressBar(progress);
     
-    if (elapsed > lastNoteTime + 2000 && gameState.notes.length === 0) {
+    // Check if song is complete
+    if (elapsed > songDuration && gameState.notes.length === 0) {
         endGame();
         return;
     }
@@ -422,9 +434,9 @@ function startGame() {
     }
     
     // Get song ID from current song
-    const songId = Object.keys(songs).find(key => songs[key] === currentSong) || 'easy';
+    const songId = currentSong.id || 'twinkle';
     
-    // Reset game state
+    // Reset game state completely
     gameState = {
         isPlaying: true,
         score: 0,
@@ -443,6 +455,11 @@ function startGame() {
         isPaused: false
     };
     
+    // Reset UI displays
+    scoreEl.textContent = '0';
+    comboEl.textContent = '0';
+    accuracyEl.textContent = '100%';
+    
     // Clear existing notes
     document.querySelectorAll('.note').forEach(n => n.remove());
     
@@ -451,6 +468,9 @@ function startGame() {
     gameOverScreen.style.display = 'none';
     document.getElementById('pause-overlay').style.display = 'none';
     document.getElementById('pause-btn').disabled = false;
+    
+    // Reset progress bar
+    updateProgressBar(0);
     
     // Start game loop
     lastTime = performance.now();
@@ -462,6 +482,7 @@ function startGame() {
 // End the game
 function endGame() {
     gameState.isPlaying = false;
+    gameState.isPaused = false;
     
     const total = gameState.hits + gameState.misses;
     const accuracy = total > 0 ? Math.round((gameState.hits / total) * 100) : 100;
@@ -503,7 +524,53 @@ function endGame() {
     // Show high scores
     showHighScores(gameState.currentSongId);
     
+    // Update progress bar to 100%
+    updateProgressBar(1);
+    
     gameOverScreen.style.display = 'flex';
+}
+
+// Restart game (same song)
+function restartGame() {
+    // Reset game state completely
+    gameState = {
+        isPlaying: true,
+        score: 0,
+        combo: 0,
+        maxCombo: 0,
+        hits: 0,
+        misses: 0,
+        notes: [],
+        noteSpeed: settings.get('noteSpeed'),
+        spawnRate: 800,
+        lastSpawn: 0,
+        songPattern: [...currentSong.pattern],
+        songIndex: 0,
+        startTime: Date.now(),
+        currentSongId: currentSong.id || 'twinkle',
+        isPaused: false
+    };
+    
+    // Reset UI
+    scoreEl.textContent = '0';
+    comboEl.textContent = '0';
+    accuracyEl.textContent = '100%';
+    
+    // Clear existing notes
+    document.querySelectorAll('.note').forEach(n => n.remove());
+    
+    // Hide screens
+    gameOverScreen.style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    
+    // Reset progress bar
+    updateProgressBar(0);
+    
+    // Start game loop
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+    
+    console.log(`🎹 Game restarted: ${currentSong.name}`);
 }
 
 // Show high scores for a song
@@ -537,24 +604,47 @@ function showStartScreen() {
 
 // Select song difficulty
 function selectSong() {
-    const difficulties = ['easy', 'medium', 'hard'];
-    const currentIndex = difficulties.indexOf(currentSong.name.toLowerCase().replace(' ', ''));
-    const nextIndex = (currentIndex + 1) % difficulties.length;
+    // Get all available songs from additionalSongs
+    const allSongs = Object.values(additionalSongs);
     
-    const songKeys = Object.keys(songs);
-    currentSong = songs[songKeys[nextIndex]];
+    // Find current song index
+    const currentIndex = allSongs.findIndex(s => s.id === (currentSong.id || 'twinkle'));
     
+    // Move to next song
+    const nextIndex = (currentIndex + 1) % allSongs.length;
+    const nextSong = allSongs[nextIndex];
+    
+    // Update current song
+    currentSong = {
+        name: nextSong.name,
+        bpm: nextSong.bpm,
+        pattern: nextSong.pattern
+    };
+    currentSong.id = nextSong.id;
+    
+    // Update display
     startScreen.querySelector('p').innerHTML = `
-        Current: <strong style="color: #ff6b9d">${currentSong.name}</strong><br>
-        BPM: ${currentSong.bpm} | Notes: ${currentSong.pattern.length}
+        Current: <strong style="color: #ff6b9d">${nextSong.name}</strong><br>
+        <span style="color: #888;">${nextSong.difficulty} • ${nextSong.category}</span><br>
+        BPM: ${nextSong.bpm} | Notes: ${nextSong.pattern.length}
     `;
 }
 
 // Initialize
 function init() {
+    // Set default song
+    const defaultSong = additionalSongs['twinkle'];
+    currentSong = {
+        name: defaultSong.name,
+        bpm: defaultSong.bpm,
+        pattern: defaultSong.pattern,
+        id: defaultSong.id
+    };
+    
     startScreen.querySelector('p').innerHTML = `
         Current: <strong style="color: #ff6b9d">${currentSong.name}</strong><br>
-        BPM: ${currentSong.bpm} | Notes: ${currentSong.pattern.length}
+        <span style="color: #888;">${defaultSong.difficulty} • ${defaultSong.category}</span><br>
+        BPM: ${defaultSong.bpm} | Notes: ${defaultSong.pattern.length}
     `;
     
     // Initialize settings

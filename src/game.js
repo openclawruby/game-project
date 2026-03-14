@@ -1,138 +1,449 @@
-// 🎮 Game Project - Core Game Engine
-// Sprint 1 MVP Implementation
-
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const scoreElement = document.getElementById('score');
+// 🎹 Piano Rhythm Game - Main Game Logic
 
 // Game State
-let score = 0;
-let gameOver = false;
-
-// Player
-const player = {
-    x: 400,
-    y: 300,
-    width: 40,
-    height: 40,
-    speed: 5,
-    color: '#4a9eff',
-    dx: 0,
-    dy: 0
+let gameState = {
+    isPlaying: false,
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    hits: 0,
+    misses: 0,
+    notes: [],
+    noteSpeed: 300, // pixels per second
+    spawnRate: 800, // ms between notes
+    lastSpawn: 0,
+    songPattern: [],
+    songIndex: 0,
+    startTime: 0
 };
 
-// Collectible
-const collectible = {
-    x: 0,
-    y: 0,
-    width: 30,
-    height: 30,
-    color: '#00ff88'
+// Constants
+const HIT_LINE_Y = 500; // Y position of hit line
+const HIT_WINDOW_PERFECT = 30; // ms for perfect hit
+const HIT_WINDOW_GOOD = 80; // ms for good hit
+const HIT_WINDOW_BAD = 150; // ms for bad hit
+
+// DOM Elements
+const scoreEl = document.getElementById('score');
+const comboEl = document.getElementById('combo');
+const accuracyEl = document.getElementById('accuracy');
+const gameArea = document.getElementById('game-area');
+const noteLanes = document.getElementById('note-lanes');
+const feedbackEl = document.getElementById('feedback');
+const comboDisplay = document.getElementById('combo-display');
+const startScreen = document.getElementById('start-screen');
+const gameOverScreen = document.getElementById('game-over-screen');
+const pianoKeys = document.querySelectorAll('.piano-key');
+
+// Song patterns (simplified melodies)
+const songs = {
+    easy: {
+        name: 'Twinkle Star',
+        bpm: 100,
+        pattern: [
+            { key: 1, time: 0 },
+            { key: 1, time: 500 },
+            { key: 5, time: 1000 },
+            { key: 5, time: 1500 },
+            { key: 6, time: 2000 },
+            { key: 6, time: 2500 },
+            { key: 5, time: 3000 },
+            { key: 4, time: 3500 },
+            { key: 4, time: 4000 },
+            { key: 3, time: 4500 },
+            { key: 3, time: 5000 },
+            { key: 2, time: 5500 },
+            { key: 2, time: 6000 },
+            { key: 1, time: 6500 },
+        ]
+    },
+    medium: {
+        name: 'River Flow',
+        bpm: 120,
+        pattern: [
+            { key: 1, time: 0 },
+            { key: 3, time: 250 },
+            { key: 5, time: 500 },
+            { key: 6, time: 750 },
+            { key: 5, time: 1000 },
+            { key: 3, time: 1250 },
+            { key: 1, time: 1500 },
+            { key: 2, time: 1750 },
+            { key: 4, time: 2000 },
+            { key: 6, time: 2250 },
+            { key: 5, time: 2500 },
+            { key: 4, time: 2750 },
+            { key: 3, time: 3000 },
+            { key: 2, time: 3250 },
+            { key: 1, time: 3500 },
+            { key: 3, time: 3750 },
+            { key: 5, time: 4000 },
+            { key: 6, time: 4250 },
+            { key: 5, time: 4500 },
+            { key: 3, time: 4750 },
+        ]
+    },
+    hard: {
+        name: 'Lightning Storm',
+        bpm: 160,
+        pattern: [
+            { key: 1, time: 0 },
+            { key: 2, time: 187 },
+            { key: 3, time: 375 },
+            { key: 4, time: 562 },
+            { key: 5, time: 750 },
+            { key: 6, time: 937 },
+            { key: 5, time: 1125 },
+            { key: 4, time: 1312 },
+            { key: 3, time: 1500 },
+            { key: 2, time: 1687 },
+            { key: 1, time: 1875 },
+            { key: 3, time: 2062 },
+            { key: 5, time: 2250 },
+            { key: 6, time: 2437 },
+            { key: 5, time: 2625 },
+            { key: 4, time: 2812 },
+            { key: 3, time: 3000 },
+            { key: 2, time: 3187 },
+            { key: 1, time: 3375 },
+            { key: 6, time: 3562 },
+            { key: 5, time: 3750 },
+            { key: 4, time: 3937 },
+            { key: 3, time: 4125 },
+            { key: 2, time: 4312 },
+            { key: 1, time: 4500 },
+        ]
+    }
 };
 
-// Input handling (GAME-003)
-const keys = {};
+let currentSong = songs.easy;
 
+// Initialize keyboard input
 document.addEventListener('keydown', (e) => {
-    keys[e.key.toLowerCase()] = true;
-    // Prevent scrolling with arrow keys
-    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) {
-        e.preventDefault();
+    if (!gameState.isPlaying) return;
+    
+    const keyMap = {
+        '1': 1, 'q': 1, 'Q': 1,
+        '2': 2, 'w': 2, 'W': 2,
+        '3': 3, 'e': 3, 'E': 3,
+        '4': 4, 'r': 4, 'R': 4,
+        '5': 5, 't': 5, 'T': 5,
+        '6': 6, 'y': 6, 'Y': 6
+    };
+    
+    const keyNumber = keyMap[e.key];
+    if (keyNumber && !e.repeat) {
+        handleInput(keyNumber);
     }
 });
 
-document.addEventListener('keyup', (e) => {
-    keys[e.key.toLowerCase()] = false;
-});
-
-// Spawn collectible at random position
-function spawnCollectible() {
-    collectible.x = Math.random() * (canvas.width - collectible.width);
-    collectible.y = Math.random() * (canvas.height - collectible.height);
+// Handle input (touch or keyboard)
+function handleInput(keyNumber) {
+    if (!gameState.isPlaying) return;
+    
+    // Visual feedback on piano key
+    const keyEl = document.querySelector(`.piano-key[data-key="${keyNumber}"]`);
+    keyEl.classList.add('active');
+    setTimeout(() => keyEl.classList.remove('active'), 100);
+    
+    // Play sound
+    audio.playNote(keyNumber);
+    
+    // Check for hits
+    checkHit(keyNumber);
 }
 
-// Update game state (GAME-001 - Core Game Loop)
-function update() {
-    if (gameOver) return;
-
-    // Player movement
-    if (keys['arrowup'] || keys['w']) player.y -= player.speed;
-    if (keys['arrowdown'] || keys['s']) player.y += player.speed;
-    if (keys['arrowleft'] || keys['a']) player.x -= player.speed;
-    if (keys['arrowright'] || keys['d']) player.x += player.speed;
-
-    // Boundary checking
-    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
-    player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
-
-    // Collision detection with collectible
-    if (
-        player.x < collectible.x + collectible.width &&
-        player.x + player.width > collectible.x &&
-        player.y < collectible.y + collectible.height &&
-        player.y + player.height > collectible.y
-    ) {
-        score += 10;
-        scoreElement.textContent = `Score: ${score}`;
-        spawnCollectible();
+// Check if input hits a note
+function checkHit(keyNumber) {
+    const now = Date.now();
+    const hitY = HIT_LINE_Y;
+    
+    // Find notes in this lane that are near the hit line
+    const laneNotes = gameState.notes.filter(n => 
+        n.key === keyNumber && 
+        !n.hit && 
+        !n.missed
+    );
+    
+    let bestHit = null;
+    let bestDistance = Infinity;
+    
+    for (const note of laneNotes) {
+        const noteY = note.y + 50; // Bottom of note
+        const distance = Math.abs(noteY - hitY);
+        
+        if (distance < HIT_WINDOW_BAD && distance < bestDistance) {
+            bestDistance = distance;
+            bestHit = note;
+        }
+    }
+    
+    if (bestHit) {
+        // Determine hit quality
+        let quality;
+        if (bestDistance <= HIT_WINDOW_PERFECT) {
+            quality = 'perfect';
+        } else if (bestDistance <= HIT_WINDOW_GOOD) {
+            quality = 'good';
+        } else {
+            quality = 'bad';
+        }
+        
+        registerHit(bestHit, quality);
     }
 }
 
-// Render game (GAME-002 - Basic Graphics)
-function draw() {
-    // Clear canvas
-    ctx.fillStyle = '#0f0f23';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw grid pattern
-    ctx.strokeStyle = '#1a1a3e';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < canvas.width; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, canvas.height);
-        ctx.stroke();
+// Register a successful hit
+function registerHit(note, quality) {
+    note.hit = true;
+    gameState.hits++;
+    
+    let points = 0;
+    let feedback = '';
+    
+    if (quality === 'perfect') {
+        points = 100;
+        feedback = 'Perfect!';
+        gameState.combo++;
+        audio.playHitSound('perfect');
+    } else if (quality === 'good') {
+        points = 50;
+        feedback = 'Good!';
+        gameState.combo++;
+        audio.playHitSound('good');
+    } else {
+        points = 10;
+        feedback = 'Bad';
+        gameState.combo = 0;
+        audio.playHitSound('bad');
     }
-    for (let i = 0; i < canvas.height; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, i);
-        ctx.lineTo(canvas.width, i);
-        ctx.stroke();
+    
+    // Combo multiplier
+    if (gameState.combo >= 10) points *= 2;
+    else if (gameState.combo >= 5) points *= 1.5;
+    
+    gameState.score += Math.floor(points);
+    gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
+    
+    // Update UI
+    updateScore();
+    showFeedback(feedback, quality);
+    
+    // Visual on note
+    const noteEl = note.element;
+    if (noteEl) {
+        noteEl.classList.add('hit');
+        noteEl.style.background = audio.getColor(note.key);
     }
+}
 
-    // Draw collectible
-    ctx.fillStyle = collectible.color;
-    ctx.shadowColor = collectible.color;
-    ctx.shadowBlur = 15;
-    ctx.fillRect(collectible.x, collectible.y, collectible.width, collectible.height);
-    ctx.shadowBlur = 0;
+// Show feedback text
+function showFeedback(text, quality) {
+    feedbackEl.textContent = text;
+    feedbackEl.className = '';
+    feedbackEl.classList.add(`feedback-${quality}`);
+    feedbackEl.style.opacity = '1';
+    
+    setTimeout(() => {
+        feedbackEl.style.opacity = '0';
+    }, 500);
+    
+    // Combo display
+    if (gameState.combo >= 5) {
+        comboDisplay.textContent = `${gameState.combo} Combo!`;
+        comboDisplay.classList.add('show');
+        setTimeout(() => comboDisplay.classList.remove('show'), 500);
+    }
+}
 
-    // Draw player
-    ctx.fillStyle = player.color;
-    ctx.shadowColor = player.color;
-    ctx.shadowBlur = 20;
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-    ctx.shadowBlur = 0;
+// Update score display
+function updateScore() {
+    scoreEl.textContent = gameState.score;
+    comboEl.textContent = gameState.combo;
+    
+    const total = gameState.hits + gameState.misses;
+    const accuracy = total > 0 ? Math.round((gameState.hits / total) * 100) : 100;
+    accuracyEl.textContent = `${accuracy}%`;
+}
 
-    // Draw player eyes (cute factor!)
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(player.x + 10, player.y + 10, 8, 8);
-    ctx.fillRect(player.x + 22, player.y + 10, 8, 8);
+// Spawn a note
+function spawnNote(keyNumber, y = -50) {
+    const lane = noteLanes.children[keyNumber - 1];
+    const noteEl = document.createElement('div');
+    noteEl.className = 'note';
+    noteEl.style.background = audio.getColor(keyNumber);
+    noteEl.style.boxShadow = `0 0 15px ${audio.getColor(keyNumber)}`;
+    
+    lane.appendChild(noteEl);
+    
+    const note = {
+        key: keyNumber,
+        y: y,
+        element: noteEl,
+        hit: false,
+        missed: false,
+        spawnTime: Date.now()
+    };
+    
+    gameState.notes.push(note);
+    return note;
+}
+
+// Update notes positions
+function updateNotes(deltaTime) {
+    const now = Date.now();
+    const gameHeight = gameArea.offsetHeight;
+    
+    // Spawn notes based on song pattern
+    if (gameState.songPattern.length > 0) {
+        const elapsed = now - gameState.startTime;
+        
+        // Spawn upcoming notes
+        while (gameState.songIndex < gameState.songPattern.length) {
+            const noteData = gameState.songPattern[gameState.songIndex];
+            const spawnTime = noteData.time - (HIT_LINE_Y / gameState.noteSpeed * 1000);
+            
+            if (elapsed >= spawnTime) {
+                spawnNote(noteData.key);
+                gameState.songIndex++;
+            } else {
+                break;
+            }
+        }
+    }
+    
+    // Update note positions
+    for (const note of gameState.notes) {
+        if (note.hit || note.missed) continue;
+        
+        note.y += (gameState.noteSpeed * deltaTime) / 1000;
+        note.element.style.transform = `translateY(${note.y}px)`;
+        
+        // Check if missed
+        if (note.y > gameHeight) {
+            note.missed = true;
+            gameState.misses++;
+            gameState.combo = 0;
+            note.element.classList.add('missed');
+            updateScore();
+        }
+    }
+    
+    // Clean up old notes
+    gameState.notes = gameState.notes.filter(n => {
+        if (n.y > gameHeight + 100) {
+            if (n.element && n.element.parentNode) {
+                n.element.remove();
+            }
+            return false;
+        }
+        return true;
+    });
 }
 
 // Game loop
-function gameLoop() {
-    update();
-    draw();
+let lastTime = 0;
+function gameLoop(timestamp) {
+    if (!gameState.isPlaying) return;
+    
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    updateNotes(deltaTime);
+    
+    // Check if song is complete
+    const elapsed = Date.now() - gameState.startTime;
+    const lastNoteTime = gameState.songPattern[gameState.songPattern.length - 1]?.time || 0;
+    
+    if (elapsed > lastNoteTime + 2000 && gameState.notes.length === 0) {
+        endGame();
+        return;
+    }
+    
     requestAnimationFrame(gameLoop);
 }
 
-// Initialize game
-function init() {
-    spawnCollectible();
-    gameLoop();
-    console.log('🎮 Game initialized! Sprint 1 MVP ready.');
+// Start the game
+function startGame() {
+    // Initialize audio
+    audio.init();
+    
+    // Reset game state
+    gameState = {
+        isPlaying: true,
+        score: 0,
+        combo: 0,
+        maxCombo: 0,
+        hits: 0,
+        misses: 0,
+        notes: [],
+        noteSpeed: 300,
+        spawnRate: 800,
+        lastSpawn: 0,
+        songPattern: [...currentSong.pattern],
+        songIndex: 0,
+        startTime: Date.now()
+    };
+    
+    // Clear existing notes
+    document.querySelectorAll('.note').forEach(n => n.remove());
+    
+    // Hide screens
+    startScreen.style.display = 'none';
+    gameOverScreen.style.display = 'none';
+    
+    // Start game loop
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+    
+    console.log(`🎹 Game started: ${currentSong.name}`);
 }
 
-// Start!
+// End the game
+function endGame() {
+    gameState.isPlaying = false;
+    
+    const total = gameState.hits + gameState.misses;
+    const accuracy = total > 0 ? Math.round((gameState.hits / total) * 100) : 100;
+    
+    document.getElementById('final-score').innerHTML = `
+        Score: ${gameState.score}<br>
+        Max Combo: ${gameState.maxCombo}<br>
+        Accuracy: ${accuracy}%<br>
+        Hits: ${gameState.hits} | Misses: ${gameState.misses}
+    `;
+    
+    gameOverScreen.style.display = 'flex';
+}
+
+// Show start screen
+function showStartScreen() {
+    startScreen.style.display = 'flex';
+    gameOverScreen.style.display = 'none';
+}
+
+// Select song difficulty
+function selectSong() {
+    const difficulties = ['easy', 'medium', 'hard'];
+    const currentIndex = difficulties.indexOf(currentSong.name.toLowerCase().replace(' ', ''));
+    const nextIndex = (currentIndex + 1) % difficulties.length;
+    
+    const songKeys = Object.keys(songs);
+    currentSong = songs[songKeys[nextIndex]];
+    
+    startScreen.querySelector('p').innerHTML = `
+        Current: <strong style="color: #ff6b9d">${currentSong.name}</strong><br>
+        BPM: ${currentSong.bpm} | Notes: ${currentSong.pattern.length}
+    `;
+}
+
+// Initialize
+function init() {
+    startScreen.querySelector('p').innerHTML = `
+        Current: <strong style="color: #ff6b9d">${currentSong.name}</strong><br>
+        BPM: ${currentSong.bpm} | Notes: ${currentSong.pattern.length}
+    `;
+    console.log('🎹 Piano Rhythm Game loaded!');
+}
+
 init();

@@ -260,7 +260,13 @@
 <body>
     <div id="game-container">
         <div id="header">
-            <h1>🎹 Piano Rhythm</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h1 style="margin: 0;">🎹 Piano Rhythm</h1>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn" style="padding: 8px 15px; font-size: 14px;" onclick="togglePause()" id="pause-btn" disabled>⏸️</button>
+                    <button class="btn" style="padding: 8px 15px; font-size: 14px;" onclick="showSettings()">⚙️</button>
+                </div>
+            </div>
             <div id="mobile-hint">Tap the keys or press 1-6 / Q-I</div>
         </div>
 
@@ -300,6 +306,7 @@
                 </p>
                 <button class="btn" onclick="startGame()">▶️ Start Game</button>
                 <button class="btn" onclick="selectSong()">🎵 Select Song</button>
+                <button class="btn" onclick="showSettings()">⚙️ Settings</button>
             </div>
 
             <div id="game-over-screen">
@@ -309,6 +316,51 @@
                 <div style="margin-top: 20px;">
                     <button class="btn" onclick="startGame()">🔄 Play Again</button>
                     <button class="btn" onclick="showStartScreen()">🏠 Menu</button>
+                </div>
+            </div>
+            
+            <!-- Pause Overlay -->
+            <div id="pause-overlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 50; flex-direction: column; align-items: center; justify-content: center; border-radius: 15px;">
+                <div style="font-size: 48px; color: #fff; margin-bottom: 30px;">⏸️ Paused</div>
+                <button class="btn" onclick="togglePause()">▶️ Resume</button>
+                <button class="btn" onclick="quitGame()">🏠 Quit to Menu</button>
+            </div>
+            
+            <!-- Settings Modal -->
+            <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center;">
+                <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 20px; padding: 30px; max-width: 400px; width: 90%; border: 2px solid #4a9eff;">
+                    <h2 style="color: #fff; margin-bottom: 20px; text-align: center;">⚙️ Settings</h2>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: #fff; display: block; margin-bottom: 10px;">🔊 Volume: <span id="volume-value">30</span>%</label>
+                        <input type="range" id="volume-slider" min="0" max="100" value="30" style="width: 100%;" oninput="updateVolume(this.value)">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: #fff; display: block; margin-bottom: 10px;">⚡ Note Speed: <span id="speed-value">100</span>%</label>
+                        <input type="range" id="speed-slider" min="50" max="200" value="100" style="width: 100%;" oninput="updateSpeed(this.value)">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: #fff; display: flex; align-items: center; justify-content: space-between;">
+                            <span>🎵 Key Sounds</span>
+                            <input type="checkbox" id="sounds-toggle" checked onchange="toggleSounds(this.checked)" style="width: 20px; height: 20px;">
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: #fff; display: flex; align-items: center; justify-content: space-between;">
+                            <span>✨ Particle Effects</span>
+                            <input type="checkbox" id="particles-toggle" checked onchange="toggleParticles(this.checked)" style="width: 20px; height: 20px;">
+                        </label>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 30px;">
+                        <button class="btn" style="flex: 1;" onclick="saveSettings()">💾 Save</button>
+                        <button class="btn" style="flex: 1; background: linear-gradient(135deg, #666, #444);" onclick="closeSettings()">❌ Close</button>
+                    </div>
+                    
+                    <button class="btn" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, #d63031, #c0392b);" onclick="resetSettings()">🔄 Reset to Defaults</button>
                 </div>
             </div>
         </div>
@@ -336,6 +388,8 @@
     </div>
 
     <script src="src/audio.js"></script>
+    <script src="src/settings.js"></script>
+    <script src="src/particles.js"></script>
     <script src="src/highscores.js"></script>
     <script src="src/game.js"></script>
 </body>

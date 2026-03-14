@@ -208,16 +208,44 @@ function registerHit(note, quality) {
         feedback = 'Perfect!';
         gameState.combo++;
         audio.playHitSound('perfect');
+        
+        // Particle burst for perfect hits
+        if (settings.get('particlesEnabled') && particles) {
+            const laneIndex = note.key - 1;
+            const lane = noteLanes.children[laneIndex];
+            const rect = lane.getBoundingClientRect();
+            const gameRect = gameArea.getBoundingClientRect();
+            const x = rect.left - gameRect.left + rect.width / 2;
+            const y = note.y + 25;
+            particles.createBurst(x, y, audio.getColor(note.key), 25);
+        }
     } else if (quality === 'good') {
         points = 50;
         feedback = 'Good!';
         gameState.combo++;
         audio.playHitSound('good');
+        
+        // Small sparkle for good hits
+        if (settings.get('particlesEnabled') && particles) {
+            const laneIndex = note.key - 1;
+            const lane = noteLanes.children[laneIndex];
+            const rect = lane.getBoundingClientRect();
+            const gameRect = gameArea.getBoundingClientRect();
+            const x = rect.left - gameRect.left + rect.width / 2;
+            const y = note.y + 25;
+            particles.createSparkle(x, y, audio.getColor(note.key));
+        }
     } else {
         points = 10;
         feedback = 'Bad';
         gameState.combo = 0;
         audio.playHitSound('bad');
+    }
+    
+    // Combo celebration at milestones
+    if (gameState.combo > 0 && gameState.combo % 10 === 0 && settings.get('particlesEnabled') && particles) {
+        const gameRect = gameArea.getBoundingClientRect();
+        particles.createComboCelebration(gameRect.width / 2, gameRect.height / 2, '#ffd700');
     }
     
     // Combo multiplier
@@ -353,6 +381,16 @@ function gameLoop(timestamp) {
     
     updateNotes(deltaTime);
     
+    // Update and render particles
+    if (particles && settings.get('particlesEnabled')) {
+        particles.update();
+        // Clear and redraw particles
+        const canvas = particles.canvas;
+        const ctx = particles.ctx;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.draw();
+    }
+    
     // Check if song is complete
     const elapsed = Date.now() - gameState.startTime;
     const lastNoteTime = gameState.songPattern[gameState.songPattern.length - 1]?.time || 0;
@@ -370,6 +408,19 @@ function startGame() {
     // Initialize audio
     audio.init();
     
+    // Initialize particles
+    if (typeof particles === 'undefined' && gameArea) {
+        const canvas = document.createElement('canvas');
+        canvas.width = gameArea.offsetWidth;
+        canvas.height = gameArea.offsetHeight;
+        canvas.style.position = 'absolute';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        gameArea.appendChild(canvas);
+        initParticles(canvas);
+    }
+    
     // Get song ID from current song
     const songId = Object.keys(songs).find(key => songs[key] === currentSong) || 'easy';
     
@@ -382,7 +433,7 @@ function startGame() {
         hits: 0,
         misses: 0,
         notes: [],
-        noteSpeed: 300,
+        noteSpeed: settings.get('noteSpeed'),
         spawnRate: 800,
         lastSpawn: 0,
         songPattern: [...currentSong.pattern],
@@ -398,6 +449,8 @@ function startGame() {
     // Hide screens
     startScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('pause-btn').disabled = false;
     
     // Start game loop
     lastTime = performance.now();
@@ -503,7 +556,115 @@ function init() {
         Current: <strong style="color: #ff6b9d">${currentSong.name}</strong><br>
         BPM: ${currentSong.bpm} | Notes: ${currentSong.pattern.length}
     `;
+    
+    // Initialize settings
+    if (typeof settings !== 'undefined') {
+        settings.apply();
+        document.getElementById('volume-slider').value = settings.get('masterVolume') * 100;
+        document.getElementById('speed-slider').value = (settings.get('noteSpeed') / 300) * 100;
+        document.getElementById('sounds-toggle').checked = settings.get('keySoundsEnabled');
+        document.getElementById('particles-toggle').checked = settings.get('particlesEnabled');
+    }
+    
     console.log('🎹 Piano Rhythm Game loaded!');
 }
+
+// Pause functionality
+function togglePause() {
+    if (!gameState.isPlaying && !gameState.isPaused) return;
+    
+    const pauseOverlay = document.getElementById('pause-overlay');
+    const pauseBtn = document.getElementById('pause-btn');
+    
+    if (gameState.isPaused) {
+        // Resume
+        gameState.isPaused = false;
+        gameState.isPlaying = true;
+        pauseOverlay.style.display = 'none';
+        pauseBtn.disabled = false;
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+        if (audio.ctx) audio.ctx.resume();
+    } else {
+        // Pause
+        gameState.isPaused = true;
+        gameState.isPlaying = false;
+        pauseOverlay.style.display = 'flex';
+        pauseBtn.disabled = false;
+        if (audio.ctx) audio.ctx.suspend();
+    }
+}
+
+function quitGame() {
+    gameState.isPlaying = false;
+    gameState.isPaused = false;
+    document.getElementById('pause-overlay').style.display = 'none';
+    showStartScreen();
+    document.getElementById('pause-btn').disabled = true;
+}
+
+// Settings functions
+function showSettings() {
+    const modal = document.getElementById('settings-modal');
+    modal.style.display = 'flex';
+    
+    // Load current values
+    document.getElementById('volume-slider').value = settings.get('masterVolume') * 100;
+    document.getElementById('volume-value').textContent = Math.round(settings.get('masterVolume') * 100);
+    document.getElementById('speed-slider').value = (settings.get('noteSpeed') / 300) * 100;
+    document.getElementById('speed-value').textContent = Math.round((settings.get('noteSpeed') / 300) * 100);
+    document.getElementById('sounds-toggle').checked = settings.get('keySoundsEnabled');
+    document.getElementById('particles-toggle').checked = settings.get('particlesEnabled');
+}
+
+function closeSettings() {
+    document.getElementById('settings-modal').style.display = 'none';
+}
+
+function updateVolume(value) {
+    document.getElementById('volume-value').textContent = value;
+    settings.set('masterVolume', value / 100);
+    if (audio.masterGain) {
+        audio.masterGain.gain.value = value / 100;
+    }
+}
+
+function updateSpeed(value) {
+    document.getElementById('speed-value').textContent = value;
+    settings.set('noteSpeed', (value / 100) * 300);
+    if (gameState.isPlaying) {
+        gameState.noteSpeed = (value / 100) * 300;
+    }
+}
+
+function toggleSounds(enabled) {
+    settings.set('keySoundsEnabled', enabled);
+}
+
+function toggleParticles(enabled) {
+    settings.set('particlesEnabled', enabled);
+}
+
+function saveSettings() {
+    settings.saveSettings();
+    settings.apply();
+    closeSettings();
+}
+
+function resetSettings() {
+    if (confirm('Reset all settings to defaults?')) {
+        settings.reset();
+        settings.apply();
+        showSettings();
+    }
+}
+
+// Keyboard shortcut for pause
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && gameState.isPlaying) {
+        e.preventDefault();
+        togglePause();
+    }
+});
 
 init();

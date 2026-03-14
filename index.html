@@ -305,8 +305,11 @@
             <div id="game-over-screen">
                 <div class="screen-title">🎮 Game Over</div>
                 <div id="final-score" style="color: #fff; font-size: 24px; margin-bottom: 20px;"></div>
-                <button class="btn" onclick="startGame()">🔄 Play Again</button>
-                <button class="btn" onclick="showStartScreen()">🏠 Menu</button>
+                <div id="high-scores"></div>
+                <div style="margin-top: 20px;">
+                    <button class="btn" onclick="startGame()">🔄 Play Again</button>
+                    <button class="btn" onclick="showStartScreen()">🏠 Menu</button>
+                </div>
             </div>
         </div>
 
@@ -333,6 +336,7 @@
     </div>
 
     <script src="src/audio.js"></script>
+    <script src="src/highscores.js"></script>
     <script src="src/game.js"></script>
 </body>
 </html>
